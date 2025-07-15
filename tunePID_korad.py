@@ -4,7 +4,8 @@ import serial
 import matplotlib.pyplot as plt
 from Korad import Korad
 from Pyrometer import Pyrometer
-from PID import PIDController 
+from PID import PIDController
+from ZieglerNicholsAutoTuner import ZieglerNicholsAutoTuner 
 
 
 
@@ -39,10 +40,30 @@ except ValueError:
     print("Invalid temperature entered. Exiting.")
     exit()
 
-# adjust parameters
-print("\nDefault PID parameters: Kp=1.0, Ki=0.1, Kd=0.01")
-adjust_pid = input("Do you want to adjust PID parameters? (y/n): ").lower()
-if adjust_pid == 'y':
+# PID parameter selection
+print("\nPID Parameter Options:")
+print("1. Use default parameters (Kp=1.0, Ki=0.1, Kd=0.01)")
+print("2. Manually enter parameters")
+print("3. Auto-tune using Ziegler-Nichols method")
+
+while True:
+    try:
+        choice = input("Select option (1/2/3): ").strip()
+        if choice in ['1', '2', '3']:
+            break
+        else:
+            print("Please enter 1, 2, or 3")
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        exit()
+
+if choice == '1':
+    # Use default parameters
+    kp, ki, kd = 1.0, 0.1, 0.01
+    print(f"Using default parameters: Kp={kp}, Ki={ki}, Kd={kd}")
+    
+elif choice == '2':
+    # Manual parameter entry
     try:
         kp = float(input("Enter Kp value: "))
         ki = float(input("Enter Ki value: "))
@@ -50,8 +71,63 @@ if adjust_pid == 'y':
     except ValueError:
         print("Invalid PID value entered. Using defaults.")
         kp, ki, kd = 1.0, 0.1, 0.01
-else:
-    kp, ki, kd = 1.0, 0.1, 0.01
+        
+elif choice == '3':
+    # Auto-tuning using Ziegler-Nichols
+    print("\nStarting Ziegler-Nichols Auto-Tuning...")
+    print("This process will:")
+    print("1. Find the critical gain (Kc) where oscillations occur")
+    print("2. Measure the oscillation period (Tc)")
+    print("3. Calculate optimal PID parameters")
+    print("4. This may take several minutes and will cause temperature oscillations")
+    
+    confirm = input("Continue with auto-tuning? (y/n): ").lower()
+    if confirm != 'y':
+        print("Auto-tuning cancelled. Using default parameters.")
+        kp, ki, kd = 1.0, 0.1, 0.01
+    else:
+        # Run auto-tuning
+        auto_tuner = ZieglerNicholsAutoTuner(
+            pyrometer=pyrometer,
+            psu=PSU,
+            target_temp=target_temp,
+            max_current=max_current,
+            min_current=min_current
+        )
+        
+        print("\n" + "="*50)
+        print("STARTING AUTO-TUNING PROCESS")
+        print("="*50)
+        
+        tuning_success = auto_tuner.run_auto_tuning()
+        
+        if tuning_success:
+            results = auto_tuner.get_tuning_results()
+            kp = results['kp']
+            ki = results['ki']
+            kd = results['kd']
+            
+            print("\n" + "="*50)
+            print("AUTO-TUNING COMPLETED SUCCESSFULLY!")
+            print("="*50)
+            print(f"Critical Gain (Kc): {results['critical_gain']:.4f}")
+            print(f"Critical Period (Tc): {results['critical_period']:.2f}s")
+            print(f"Calculated PID Parameters:")
+            print(f"  Kp = {kp:.4f}")
+            print(f"  Ki = {ki:.4f}")
+            print(f"  Kd = {kd:.4f}")
+            
+            # Ask user if they want to use these parameters
+            use_tuned = input("\nUse these auto-tuned parameters? (y/n): ").lower()
+            if use_tuned != 'y':
+                print("Using default parameters instead.")
+                kp, ki, kd = 1.0, 0.1, 0.01
+        else:
+            print("\n" + "="*50)
+            print("AUTO-TUNING FAILED!")
+            print("="*50)
+            print("Using default parameters instead.")
+            kp, ki, kd = 1.0, 0.1, 0.01
 
 # PID Initialization 
 
