@@ -80,17 +80,18 @@ class ZieglerNicholsAutoTuner:
         amplitude_std = std_temp * 2  # Approximate amplitude
         
         # Check for sustained oscillations using multiple criteria
-        has_peaks_valleys = len(peaks) >= 2 and len(valleys) >= 2
-        has_crossings = crossings >= 4  # At least 4 crossings indicate oscillation
+        has_some_peaks_valleys = len(peaks) >= 1 and len(valleys) >= 1
+        has_crossings = crossings >= 2  # At least 2 crossings indicate oscillation
         sufficient_amplitude = amplitude_std > self.oscillation_threshold
         
-        if has_peaks_valleys:
+        # Calculate amplitude using the best available method
+        if has_some_peaks_valleys:
             # Calculate amplitude from peaks and valleys
             peak_temps = [p[1] for p in peaks]
             valley_temps = [v[1] for v in valleys]
             amplitude = (np.mean(peak_temps) - np.mean(valley_temps)) / 2
             
-            # Calculate period from peaks
+            # Calculate period from peaks if we have enough
             if len(peaks) >= 2:
                 peak_times = [p[0] for p in peaks]
                 periods = []
@@ -98,7 +99,9 @@ class ZieglerNicholsAutoTuner:
                     periods.append(peak_times[i] - peak_times[i-1])
                 period = np.mean(periods) if periods else 0
             else:
-                period = 0
+                # Estimate period from time span and expected oscillations
+                time_span = recent_times[-1] - recent_times[0]
+                period = time_span / max(1, len(peaks) + len(valleys) - 1)
         else:
             # Use standard deviation method
             amplitude = amplitude_std
@@ -109,10 +112,19 @@ class ZieglerNicholsAutoTuner:
             else:
                 period = 0
         
+        # Simple range-based check as backup
+        temp_range = max(recent_temps) - min(recent_temps)
+        range_amplitude = temp_range / 2
+        
+        # Use the larger amplitude
+        if range_amplitude > amplitude:
+            amplitude = range_amplitude
+        
         # More relaxed oscillation detection
         is_oscillating = (sufficient_amplitude and 
-                         (has_peaks_valleys or has_crossings) and
-                         period > 2.0)  # Minimum period of 2 seconds
+                         amplitude > self.oscillation_threshold and
+                         (has_some_peaks_valleys or has_crossings or temp_range > 2 * self.oscillation_threshold) and
+                         period > 1.0)  # Minimum period of 1 second
         
         return is_oscillating, amplitude, period
     
