@@ -1,8 +1,9 @@
-# tune_korad.py
+# tunePID_multi_psu.py - PID tuning script supporting Korad and TDK Lambda PSUs
 import time
 import serial
 import matplotlib.pyplot as plt
 from Korad import Korad
+from TDKLambda import TDKLambda
 from Pyrometer import Pyrometer
 from PID import PIDController
 from ZieglerNicholsAutoTuner import ZieglerNicholsAutoTuner
@@ -14,6 +15,38 @@ from InputHandler import InputHandler
 PYROMETER_PORT = "/dev/cu.usbserial-B00378DF"  
 PSU_PORT = "/dev/cu.usbmodem00273B64024C1"     
 
+# Power Supply Selection
+print("Available Power Supply Options:")
+print("1. Korad PSU")
+print("2. TDK Lambda PSU")
+
+while True:
+    try:
+        psu_choice = input("Select PSU type (1/2): ").strip()
+        if psu_choice in ['1', '2']:
+            break
+        else:
+            print("Please enter 1 or 2")
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        exit()
+
+# PSU Configuration
+if psu_choice == '2':
+    # TDK Lambda configuration
+    try:
+        psu_address = int(input("Enter TDK Lambda address (default 6): ") or "6")
+    except ValueError:
+        print("Invalid address. Using default (6)")
+        psu_address = 6
+    psu_type = "TDK Lambda"
+else:
+    # Korad configuration
+    psu_address = None
+    psu_type = "Korad"
+
+print(f"Selected PSU: {psu_type}")
+
 # Control parameters
 max_current = 10  # Ampere
 min_current = 0
@@ -24,7 +57,15 @@ temperature_tolerance = 0.5  # Temperature tolerance in degrees Celsius
 
 try:
     pyrometer = Pyrometer(PYROMETER_PORT)
-    PSU = Korad(PSU_PORT)
+    
+    # Initialize PSU based on selection
+    if psu_choice == '2':
+        # TDK Lambda PSU
+        PSU = TDKLambda(PSU_PORT, address=psu_address)
+    else:
+        # Korad PSU
+        PSU = Korad(PSU_PORT)
+    
     pyrometer.set_emissivity(1) 
 except serial.SerialException as e:
     print(f"Error initializing serial devices: {e}")
@@ -227,14 +268,22 @@ start_loop_time = time.time() # For relative time axis
 # --- Control Loop ---
 print(f"\nStarting temperature control loop to reach {target_temp}°C")
 
-# Initialize Korad PSU
+# Initialize PSU
 try:
     # Set voltage first (important for heating elements)
-    PSU.set_voltage(30.0)  # Set appropriate voltage for your heating element
-    PSU.set_current(min_current)  # Set initial current
+    if psu_choice == '2':
+        # TDK Lambda PSU - no channel parameter
+        PSU.set_voltage(30.0)  
+        PSU.set_current(min_current)
+    else:
+        # Korad PSU - with channel parameter
+        PSU.set_voltage(30.0)  
+        PSU.set_current(min_current)
+    
     PSU.output_on()
+    print(f"{psu_type} PSU initialized successfully")
 except Exception as e:
-    print(f"Error communicating with Korad during setup: {e}")
+    print(f"Error communicating with {psu_type} during setup: {e}")
     exit()
 
 
@@ -304,7 +353,7 @@ try:
         try:
             PSU.set_current(new_current)
         except Exception as e:
-             print(f"Error setting Korad current: {e}. Skipping actuation.")
+             print(f"Error setting {psu_type} current: {e}. Skipping actuation.")
              # Decide how to proceed - stop loop? Continue?
 
     
@@ -366,9 +415,17 @@ finally:
     print("Turning off power supply output")
     try:
         PSU.output_off()
-        print("Power supply output turned off.")
+        print(f"{psu_type} output turned off.")
     except Exception as e:
-        print(f"Error turning off Korad output: {e}")
+        print(f"Error turning off {psu_type} output: {e}")
+    
+    # Cleanup PSU connection if TDK Lambda
+    if psu_choice == '2':
+        try:
+            PSU.close()
+            print("TDK Lambda connection closed.")
+        except Exception as e:
+            print(f"Error closing TDK Lambda connection: {e}")
     
     # Cleanup adaptive PID if used
     if use_adaptive_controller:
