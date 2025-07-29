@@ -1,22 +1,17 @@
-README.md
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Ignore everything by default
+*
+
+# But not these files (required for tunePIDTable.py and tunePID_korad.py)
+!tunePIDTable.py
+!tunePID_korad.py
+!requirements.txt
+!Korad.py
+!TDKLambda.py
+!Pyrometer.py
+!PID.py
+!ZieglerNicholsAutoTuner.py
+!AdaptivePIDController.py
+!InputHandler.py
+
+# Do not ignore .gitignore itself
+!.gitignore
