@@ -3,6 +3,18 @@ import threading
 from PID import PIDController
 from ZieglerNicholsAutoTuner import ZieglerNicholsAutoTuner
 from StabilityMonitor import StabilityMonitor
+import numpy as np
+
+# Only your (second) table:
+T_sample_table = [44, 92, 186, 273, 352, 425, 490, 547, 604, 711, 765, 816, 788, 838]  # °C
+I_table        = [0,  0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0] # A
+
+def equilibrium_current(temp, T_table=T_sample_table, I_table=I_table):
+    sorter = np.argsort(T_table)
+    T_sorted = np.array(T_table)[sorter]
+    I_sorted = np.array(I_table)[sorter]
+    return float(np.interp(temp, T_sorted, I_sorted))
+
 
 class AdaptivePIDController:
     """
@@ -78,18 +90,23 @@ class AdaptivePIDController:
             self.stability_monitor.logger.info(f"PID parameters updated: Kp={kp:.4f}, Ki={ki:.4f}, Kd={kd:.4f}")
     
     def compute_control_output(self, current_temperature, dt):
-        """Compute control output using current PID parameters"""
+        """Compute control output using current PID parameters, with feedforward bias."""
         if not self.pid_controller:
             return self.min_current
             
         with self.retune_lock:
-            # Normal PID computation
-            output = self.pid_controller.compute(current_temperature, dt)
+            # Feedforward equilibrium current
+            ff_current = equilibrium_current(self.target_temp)
+            pid_correction = self.pid_controller.compute(current_temperature, dt)
+            output = ff_current + pid_correction
+
+            # Clamp output to limits
+            output = max(self.min_current, min(self.max_current, output))
             
             # Update stability monitor
             self.stability_monitor.add_measurement(
-                current_temperature, 
-                output, 
+                current_temperature,
+                output,
                 time.time()
             )
             
@@ -99,7 +116,7 @@ class AdaptivePIDController:
             self.last_time = time.time()
             
             return output
-    
+
     def check_retune_needed(self):
         """Check if re-tuning is needed and initiate if necessary"""
         if self.control_mode == 'retuning':

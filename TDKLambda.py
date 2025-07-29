@@ -15,9 +15,22 @@ class TDKLambda:
             if self.ser.is_open:
                 print(f"Serial port {self.port} is open.")
                 
+                # --- Added: Reset/Clear and Remote Mode Commands ---
+                # Clear status
+                self.ser.write(b"CLS\r")
+                time.sleep(0.1)
+                # Reset to safe state
+                self.ser.write(b"RST\r")
+                time.sleep(0.1)
+                # Set to remote mode
+                self.ser.write(b"RMT REM\r")
+                time.sleep(0.1)
+                # --- End Added ---
+                
                 # Address the device 
                 addr_command = f"ADR {self.address}\r"
                 self.ser.write(addr_command.encode())
+                time.sleep(0.3) # Add timing delay for address command response
                 response = self.ser.readline().decode().strip()
                 
                 if response == "OK":
@@ -48,30 +61,32 @@ class TDKLambda:
         self.ser.write(command_str.encode())
         time.sleep(0.3) # Short delay for command processing
         
-        response_lines = []
         if query:
-            # For queries, the first line is the data
+            # For queries, return just the first line (the data)
             line = self.ser.readline().decode().strip()
-            response_lines.append(line)
+            return line
         else:
             # For set commands, expect "OK"
             line = self.ser.readline().decode().strip()
             if line == "OK":
-                response_lines.append(line)
+                return line
             else:
                 # Attempt to read more if not "OK" for potential error messages
-                response_lines.append(line)
+                response_lines = [line]
                 time.sleep(0.1)
-                while self.ser.in_waiting > 0:
+                # Add timeout protection to prevent infinite loop
+                max_attempts = 10
+                attempts = 0
+                while self.ser.in_waiting > 0 and attempts < max_attempts:
                     additional_line = self.ser.readline().decode().strip()
                     if additional_line:
                         response_lines.append(additional_line)
                     else:
                         break
-        
-        full_response = " | ".join(response_lines)
-        # print(f"Sent: '{command_str.strip()}', Received: '{full_response}'") # For debugging
-        return full_response
+                    attempts += 1
+                
+                full_response = " | ".join(response_lines)
+                return full_response
 
 
     def set_voltage(self, voltage):
@@ -188,8 +203,8 @@ class TDKLambda:
 
 if __name__ == '__main__':
 
-    COM_PORT = '/dev/ttyUSB1'  # Default port for testing
-    ADDRESS = 6 
+    COM_PORT = '/dev/cu.usbserial-FTEFH8OH'  # Default port for testing
+    ADDRESS = 6
 
     # Check if a placeholder port is being used
     if COM_PORT == '':
@@ -203,48 +218,48 @@ if __name__ == '__main__':
             
             try:
                 # Set Voltage and Current
-                print(psu.set_voltage(5.0))  # Sets voltage to 5.0V
+                print(psu.set_voltage(10.0))  # Sets voltage to 5.0V
                 time.sleep(0.5)
                 print(psu.set_current(0.1))  # Sets current to 0.1A
                 time.sleep(0.5)
 
-            # Check programmed values
-            # Using Korad-style string output methods
-            print(psu.voltage_set())     
-            time.sleep(0.5)
-            print(psu.current_set())     
-            time.sleep(0.5)
+                # Check programmed values
+                # Using Korad-style string output methods
+                print(psu.voltage_set())     
+                time.sleep(0.5)
+                print(psu.current_set())     
+                time.sleep(0.5)
 
-            # Alternatively, get float values directly
-            # set_volt = psu.get_set_voltage()
-            # if set_volt is not None:
-            #     print(f"Programmed voltage (float): {set_volt}V")
-            # set_curr = psu.get_set_current()
-            # if set_curr is not None:
-            #     print(f"Programmed current (float): {set_curr}A")
+                # Alternatively, get float values directly
+                # set_volt = psu.get_set_voltage()
+                # if set_volt is not None:
+                #     print(f"Programmed voltage (float): {set_volt}V")
+                # set_curr = psu.get_set_current()
+                # if set_curr is not None:
+                #     print(f"Programmed current (float): {set_curr}A")
 
-            # Turn Output ON
-            print(psu.output_on())
-            time.sleep(1) # Wait for output to stabilize
+                # Turn Output ON
+                print(psu.output_on())
+                time.sleep(1) # Wait for output to stabilize
 
-            # Measure Voltage and Current
-            meas_v = psu.measure_voltage()
-            # if meas_v is not None:
-            # print(f"Measured voltage confirm: {meas_v}V") # Already printed in method
-            time.sleep(0.5)
-            meas_c = psu.measure_current()
-            # if meas_c is not None:
-            # print(f"Measured current confirm: {meas_c}A") # Already printed in method
-            time.sleep(0.5)
+                # Measure Voltage and Current
+                meas_v = psu.measure_voltage()
+                # if meas_v is not None:
+                # print(f"Measured voltage confirm: {meas_v}V") # Already printed in method
+                time.sleep(0.5)
+                meas_c = psu.measure_current()
+                # if meas_c is not None:
+                # print(f"Measured current confirm: {meas_c}A") # Already printed in method
+                time.sleep(0.5)
 
-            # Turn Output OFF
-            print(psu.output_off())
+                # Turn Output OFF
+                print(psu.output_off())
 
                 # Close the connection
                 psu.close()
             except Exception as e:
                 print(f"Error during testing: {e}")
-            psu.output_off()
-            psu.close()
+                psu.output_off()
+                psu.close()
         else:
             print("Could not connect to the power supply.")

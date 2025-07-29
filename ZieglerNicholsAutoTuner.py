@@ -12,7 +12,7 @@ class ZieglerNicholsAutoTuner:
         self.min_current = min_current
         
         # Tuning parameters
-        self.kp_start = 0.001  # Starting proportional gain
+        self.kp_start = 0.001  # Starting proportional gain # last time: 0.043 (168 Grad)
         self.kp_step = 0.001   # Step size for increasing Kp
         self.max_iterations = 100
         self.oscillation_threshold = 1.0  # Minimum oscillation amplitude to detect

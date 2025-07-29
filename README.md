@@ -1,17 +1,74 @@
 # Temperature Control System with Adaptive PID
 
-A complete temperature control system with automatic PID parameter tuning and adaptive re-tuning capabilities.
+A complete temperature control system with automatic PID parameter tuning and adaptive re-tuning capabilities. Now supports both Korad and TDK Lambda power supplies.
 
 ## 📁 File Overview
 
 ### Core Control Files
 
-#### `tunePID_korad.py` - Main Control Script
-**What it does**: The main program you run to control temperature
-- Provides 4 control modes: Default, Manual, Auto-tune, and Adaptive PID
-- Handles device initialization (PSU and pyrometer)
-- Runs the control loop with real-time plotting
-- Manages user interface and input handling
+#### `tunePID_korad.py` - Main Control Script (Multi-PSU Support)
+**What it does**: This is the main entry point for running the temperature control system. Now supports both Korad and TDK Lambda power supplies with automatic PSU type selection.
+
+**The 4 Control Modes Explained:**
+
+**Mode 1: Default Parameters**
+- **What it does**: Uses pre-set PID values (Kp=1.0, Ki=0.1, Kd=0.01)
+- **When to use**: Quick testing or when you want to get started immediately
+- **Pros**: Fast setup, no tuning required
+- **Cons**: May not be optimal for your specific heating system
+- **Best for**: Initial testing, simple systems, or when you just want to see if everything works
+
+**Mode 2: Manual Parameters**
+- **What it does**: You manually enter your own Kp, Ki, and Kd values
+- **When to use**: When you already know good PID parameters for your system
+- **Pros**: Full control over parameters, can use previously determined values
+- **Cons**: Requires PID tuning knowledge and experience
+- **Best for**: Experienced users who have tuned similar systems before
+
+**Mode 3: Auto-Tuning (Ziegler-Nichols)**
+- **What it does**: Automatically finds optimal PID parameters using the proven Ziegler-Nichols method
+- **How it works**: 
+  1. Gradually increases proportional gain until the system oscillates
+  2. Measures the oscillation frequency and amplitude
+  3. Calculates optimal PID parameters using mathematical formulas
+- **Time required**: 5-10 minutes
+- **Pros**: Scientifically proven method, finds good parameters automatically
+- **Cons**: Parameters remain fixed during operation, may not adapt to system changes
+- **Best for**: Systems that don't change over time, one-time parameter optimization
+
+**Mode 4: Adaptive PID (Recommended)**
+- **What it does**: The most advanced mode - starts with auto-tuned parameters and continuously monitors performance
+- **How it works**:
+  1. Optionally performs initial auto-tuning
+  2. Continuously monitors system stability (settling time, overshoot, oscillations)
+  3. Automatically re-tunes parameters when performance degrades
+  4. Provides real-time status and comprehensive logging
+- **Key features**:
+  - Background re-tuning without stopping temperature control
+  - Manual re-tuning trigger (press 'r' + Enter)
+  - Safety mechanisms and emergency stop
+  - Performance score tracking (0-100)
+  - Automatic logging to `stability_monitor.log`
+- **Pros**: Fully autonomous, adapts to system changes, optimal long-term performance
+- **Cons**: More complex, requires understanding of status display
+- **Best for**: Long-term operation, systems that may change over time, professional applications
+
+**Which Mode Should You Choose?**
+- **For beginners**: Start with Mode 1 (Default) to test your setup
+- **For quick results**: Use Mode 3 (Auto-tune) to get good parameters once
+- **For professional use**: Use Mode 4 (Adaptive PID) for optimal long-term control
+- **For experts**: Use Mode 2 (Manual) if you know your system well
+
+**Power Supply Support:**
+- **Korad PSU**: Traditional support with channel selection
+- **TDK Lambda PSU**: New support with address configuration
+- **Automatic selection**: Choose PSU type at startup
+- **Unified interface**: All control modes work with both PSU types
+
+**Other Functions:**
+- Handles initialization of all hardware devices (power supply and pyrometer)
+- Runs the main control loop with real-time data plotting
+- Manages user interface, input handling, and mode switching
 
 **Key settings to adjust**:
 ```python
@@ -81,11 +138,18 @@ self.min_stability_score = 70        # Trigger re-tuning below this score
 
 ### Device Interface Files
 
-#### `Korad.py` - Power Supply Interface
+#### `Korad.py` - Korad Power Supply Interface
 **What it does**: Communicates with Korad PSU over serial
-- Sets voltage and current limits
+- Sets voltage and current limits with channel support
 - Turns output on/off
 - Reads current status
+
+#### `TDKLambda.py` - TDK Lambda Power Supply Interface
+**What it does**: Communicates with TDK Lambda PSU over serial
+- Sets voltage and current limits with address-based communication
+- Turns output on/off with remote control mode
+- Reads current status with enhanced error handling
+- Includes proper serial connection management
 
 #### `Pyrometer.py` - Temperature Sensor Interface
 **What it does**: Reads temperature from pyrometer over serial
@@ -222,7 +286,8 @@ ls /dev/cu.*
 
 # You should see something like:
 # /dev/cu.usbserial-B00378DF    (Pyrometer)
-# /dev/cu.usbmodem00273B64024C1 (PSU)
+# /dev/cu.usbmodem00273B64024C1 (Korad PSU)
+# /dev/cu.usbserial-FTEFH8OH    (TDK Lambda PSU)
 ```
 
 ### Step 2: Configure Serial Ports
@@ -230,7 +295,7 @@ ls /dev/cu.*
 2. Update the port settings:
 ```python
 PYROMETER_PORT = "/dev/cu.usbserial-XXXXXXXX"  # Your pyrometer port
-PSU_PORT = "/dev/cu.usbmodem-XXXXXXXX"         # Your PSU port
+PSU_PORT = "/dev/cu.usbmodem-XXXXXXXX"         # Your PSU port (Korad or TDK Lambda)
 ```
 
 ### Step 3: Set Safety Limits
@@ -246,7 +311,22 @@ cd "/Users/saadalam/CDBS Code/Controller"
 python3 tunePID_korad.py
 ```
 
-### Step 5: Choose Control Mode
+### Step 5: Select Power Supply Type
+You'll first see:
+```
+Available Power Supply Options:
+1. Korad PSU
+2. TDK Lambda PSU
+
+Select PSU type (1/2): 2
+```
+
+**For TDK Lambda PSU**: You'll be prompted for the device address:
+```
+Enter TDK Lambda address (default 6): 6
+```
+
+### Step 6: Choose Control Mode
 You'll see:
 ```
 PID Parameter Options:
@@ -260,7 +340,7 @@ Select option (1/2/3/4): 4
 
 **Recommended**: Choose option **4** for best results
 
-### Step 6: Configure Initial Tuning
+### Step 7: Configure Initial Tuning
 ```
 Adaptive PID with Automatic Re-tuning
 Perform initial auto-tuning? (y/n): y
@@ -268,23 +348,23 @@ Perform initial auto-tuning? (y/n): y
 
 **Recommended**: Choose **y** for optimal starting parameters
 
-### Step 7: Enter Target Temperature
+### Step 8: Enter Target Temperature
 ```
 Enter target temperature (°C): 200
 ```
 
-### Step 8: Monitor Operation
+### Step 9: Monitor Operation
 - The system will start automatically
 - Real-time plot shows temperature vs time
 - Status updates every 5 seconds
 - Log file created: `stability_monitor.log`
 
-### Step 9: During Operation
+### Step 10: During Operation
 - **Normal operation**: Just watch the status display
 - **Manual re-tuning**: Type `r` + Enter
 - **Emergency stop**: Press Ctrl+C
 
-### Step 10: System Shutdown
+### Step 11: System Shutdown
 - Press Ctrl+C to stop
 - System automatically:
   - Turns off PSU output
@@ -308,6 +388,12 @@ Enter target temperature (°C): 200
 - Increase `max_iterations` in ZieglerNicholsAutoTuner.py
 - Reduce `kp_start` for more sensitive systems
 - Check heating element is working
+
+### "TDK Lambda PSU connection issues"
+- Verify correct serial port in PSU_PORT setting
+- Check device address (default is 6)
+- Ensure PSU is in remote control mode
+- Check baud rate (default 9600)
 
 ### "System health check failed"
 - Check `stability_monitor.log` for details
